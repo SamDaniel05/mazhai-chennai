@@ -15,14 +15,13 @@ jobs:
     steps:
       - name: Check Chennai stations and notify ntfy
         env:
-          # Change this topic in the workflow file, or set repo secret NTFY_TOPIC
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC || 'mazhai-chennai-samdaniel05' }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: |
           python3 << 'PY'
           import json, os, urllib.request, urllib.error
           from datetime import datetime, timezone
 
-          TOPIC = os.environ.get("NTFY_TOPIC") or "mazhai-chennai-samdaniel05"
+          TOPIC = (os.environ.get("NTFY_TOPIC") or "").strip() or "mazhai-chennai-samdaniel05"
           WET_MM = 0.15
 
           STATIONS = [
