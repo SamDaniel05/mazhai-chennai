@@ -349,7 +349,7 @@
       const frame = frames[index];
       if (!frame) return;
       if (radarLayer) map.removeLayer(radarLayer);
-      radarLayer = L.tileLayer(tileUrl(frame.path), { opacity: 0.72, zIndex: 2, maxZoom: 14 }).addTo(map);
+      radarLayer = L.tileLayer(tileUrl(frame.path), { opacity: 0.72, zIndex: 2, maxZoom: 14, maxNativeZoom: 7, minZoom: 1 }).addTo(map);
       $("radarKind").textContent = `Radar ${frame.kind === "now" ? "nowcast" : "just passed"}`;
       $("radarClock").textContent = formatClock(new Date(frame.time * 1000));
       $("scrub").value = String(index);
@@ -473,9 +473,9 @@
     function initMap() {
       map = L.map("map", {
         zoomControl: false,
-        minZoom: 10,
-        maxZoom: 14,
-      }).setView([13.1, 80.26], 11);
+        minZoom: 9,
+        maxZoom: 13,
+      }).setView([13.1, 80.26], 10);
       L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
         maxZoom: 16,
         attribution: "&copy; Esri · radar RainViewer",
