@@ -1,0 +1,100 @@
+name: Rain phone alerts
+
+on:
+  schedule:
+    # Every 15 minutes (GitHub may delay a few minutes on free tier)
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Chennai stations and notify ntfy
+        env:
+          # Change this topic in the workflow file, or set repo secret NTFY_TOPIC
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC || 'mazhai-chennai-samdaniel05' }}
+        run: |
+          python3 << 'PY'
+          import json, os, urllib.request, urllib.error
+          from datetime import datetime, timezone
+
+          TOPIC = os.environ.get("NTFY_TOPIC") or "mazhai-chennai-samdaniel05"
+          WET_MM = 0.15
+
+          STATIONS = [
+              ("Kodambakkam", 13.0524, 80.2209),
+              ("Chennai Central", 13.0827, 80.2757),
+              ("Wimco Nagar", 13.1789, 80.3095),
+          ]
+
+          def fetch(lat, lon):
+              url = (
+                  "https://api.met.no/weatherapi/locationforecast/2.0/compact"
+                  f"?lat={lat:.3f}&lon={lon:.3f}"
+              )
+              req = urllib.request.Request(
+                  url,
+                  headers={"User-Agent": "MazhaiRainAlert/1.0 (github.com/SamDaniel05/mazhai-chennai)"},
+              )
+              with urllib.request.urlopen(req, timeout=20) as res:
+                  return json.load(res)
+
+          wet = []
+          for name, lat, lon in STATIONS:
+              try:
+                  data = fetch(lat, lon)
+              except Exception as e:
+                  print(f"fail {name}: {e}")
+                  continue
+              series = data.get("properties", {}).get("timeseries", [])
+              now = datetime.now(timezone.utc).timestamp()
+              row = None
+              for r in series:
+                  t = datetime.fromisoformat(r["time"].replace("Z", "+00:00")).timestamp()
+                  if t + 3600 > now and t < now + 4200:
+                      row = r
+                      break
+              if not row:
+                  print(f"no hour row for {name}")
+                  continue
+              details = (row.get("data") or {}).get("next_1_hours") or {}
+              mm = float((details.get("details") or {}).get("precipitation_amount") or 0)
+              symbol = ((details.get("summary") or {}).get("symbol_code") or "").lower()
+              raining = mm >= WET_MM or any(k in symbol for k in ("rain", "sleet", "thunder"))
+              print(f"{name}: {mm:.2f} mm symbol={symbol} wet={raining}")
+              if raining:
+                  wet.append(f"{name} (~{mm:.1f} mm this hour)")
+
+          if not wet:
+              print("All dry — no notification")
+              raise SystemExit(0)
+
+          body = "Rain expected this hour:\n" + "\n".join(f"• {w}" for w in wet)
+          body += "\n\nOpen Mazhai: https://samdaniel05.github.io/mazhai-chennai/"
+          title = "Mazhai · rain near Chennai"
+          if len(wet) == 1:
+              title = f"Mazhai · rain at {wet[0].split(' (~')[0]}"
+
+          data = body.encode("utf-8")
+          req = urllib.request.Request(
+              f"https://ntfy.sh/{TOPIC}",
+              data=data,
+              method="POST",
+              headers={
+                  "Title": title,
+                  "Priority": "high",
+                  "Tags": "cloud_with_rain,umbrella",
+                  "Click": "https://samdaniel05.github.io/mazhai-chennai/",
+              },
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=20) as res:
+                  print("ntfy status", res.status, res.read()[:200])
+          except urllib.error.HTTPError as e:
+              print("ntfy error", e.code, e.read()[:300])
+              raise
+          PY
