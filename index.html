@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mazhai — Chennai rain, next 60 min</title>
+  <meta name="description" content="Next 60 minutes of rain for Kodambakkam, Chennai Central (Park), and Wimco Nagar." />
+  <meta name="theme-color" content="#07141c" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,520;9..144,640&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --ink: #07141c;
+      --surface: #10222c;
+      --surface-2: #17303c;
+      --foam: #d7eef4;
+      --mist: #8eacb8;
+      --rain: #3ddec8;
+      --alert: #f2a35a;
+      --line: #23404c;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: Outfit, system-ui, sans-serif;
+      background: var(--ink);
+      color: var(--foam);
+      line-height: 1.5;
+    }
+    #map { position: absolute; inset: 0; background: var(--ink); }
+    .leaflet-container { font-family: Outfit, system-ui, sans-serif; background: var(--ink); }
+    .leaflet-control-attribution {
+      background: color-mix(in srgb, var(--ink) 72%, transparent) !important;
+      color: var(--mist) !important;
+      font-size: 10px !important;
+    }
+    .leaflet-control-attribution a { color: var(--foam) !important; }
+    header {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 1000;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      gap: 12px; padding: 16px; pointer-events: none;
+    }
+    .brand, .spot-btn {
+      pointer-events: auto;
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+    }
+    .brand {
+      background: color-mix(in srgb, var(--ink) 82%, transparent);
+      padding: 12px 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    .brand h1 {
+      margin: 0;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.6rem;
+      font-weight: 640;
+      letter-spacing: -0.02em;
+    }
+    .brand p { margin: 4px 0 0; color: var(--mist); font-size: .875rem; }
+    .spot-btn {
+      border: 0;
+      min-height: 44px;
+      padding: 0 16px;
+      background: var(--rain);
+      color: var(--ink);
+      font: 500 .875rem Outfit, system-ui, sans-serif;
+      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .panel {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 1000;
+      margin: 0 auto; max-width: 720px; padding: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: color-mix(in srgb, var(--surface) 94%, transparent);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 20px 50px rgba(0,0,0,.45);
+      padding: 18px;
+      max-height: 62dvh;
+      overflow-y: auto;
+    }
+    .top {
+      display: flex; justify-content: space-between; gap: 12px; align-items: flex-start;
+    }
+    .eyebrow {
+      margin: 0;
+      color: var(--mist);
+      font-size: .7rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .title {
+      margin: 6px 0 0;
+      font-family: Fraunces, Georgia, serif;
+      font-size: clamp(1.8rem, 5vw, 2.4rem);
+      line-height: 1.05;
+      font-weight: 640;
+    }
+    .detail { margin: 8px 0 0; color: var(--mist); font-size: .9rem; max-width: 42ch; }
+    .pill {
+      flex-shrink: 0;
+      min-height: 44px;
+      display: inline-flex; align-items: center;
+      border-radius: 999px;
+      padding: 0 14px;
+      font-size: .875rem;
+      font-weight: 600;
+    }
+    .pill.dry { background: var(--surface-2); color: var(--foam); }
+    .pill.soon { background: var(--alert); color: var(--ink); }
+    .pill.later { background: var(--rain); color: var(--ink); }
+    .pill.loading { background: var(--surface-2); color: var(--mist); }
+    .slots { margin-top: 16px; display: grid; gap: 8px; }
+    .slots.many { grid-template-columns: repeat(4, 1fr); }
+    .slot {
+      background: var(--surface-2);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+    .slot.wide { display: flex; align-items: center; gap: 12px; }
+    .slot .t { color: var(--mist); font-size: .75rem; }
+    .slot.wide .t { width: 5.5rem; }
+    .bar-wrap {
+      background: var(--ink);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .slot:not(.wide) .bar-wrap {
+      width: 12px; height: 56px; margin: 8px auto 0;
+      display: flex; align-items: flex-end;
+    }
+    .slot.wide .bar-wrap { height: 12px; flex: 1; }
+    .bar { background: var(--rain); border-radius: 999px; }
+    .slot:not(.wide) .bar { width: 100%; }
+    .slot.wide .bar { height: 100%; }
+    .slot .mm { color: var(--foam); font-size: .75rem; }
+    .slot:not(.wide) .mm { text-align: center; margin-top: 8px; }
+    .slot.wide .mm { width: 3.5rem; text-align: right; }
+    .radar-row {
+      margin-top: 16px;
+      display: flex; justify-content: space-between; gap: 12px;
+      color: var(--mist); font-size: .75rem;
+    }
+    input[type=range] {
+      width: 100%;
+      margin-top: 8px;
+      accent-color: var(--rain);
+    }
+    .actions {
+      margin-top: 10px;
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    }
+    .ghost {
+      min-height: 44px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--foam);
+      border-radius: 999px;
+      padding: 0 16px;
+      font: 500 .875rem Outfit, system-ui, sans-serif;
+      cursor: pointer;
+    }
+    .ghost:disabled { opacity: .5; cursor: not-allowed; }
+    .err { color: var(--alert); font-size: .8rem; margin: 0; }
+    .patches {
+      margin-top: 14px;
+      display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px;
+    }
+    .patch {
+      flex-shrink: 0;
+      min-height: 44px;
+      border: 0;
+      border-radius: 999px;
+      padding: 0 14px;
+      font: 500 .875rem Outfit, system-ui, sans-serif;
+      cursor: pointer;
+      background: var(--surface-2);
+      color: var(--foam);
+    }
+    .patch.active { background: var(--foam); color: var(--ink); }
+    @media (max-width: 520px) {
+      .slots.many { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <header>
+    <div class="brand">
+      <h1>Mazhai</h1>
+      <p>Chennai · next 60 minutes</p>
+    </div>
+    <button class="spot-btn" id="locate" type="button">Use nearest of 3</button>
+  </header>
+  <section class="panel">
+    <div class="card">
+      <div class="top">
+        <div>
+          <p class="eyebrow" id="eyebrow">Watching · Kodambakkam</p>
+          <h2 class="title" id="title">Checking…</h2>
+          <p class="detail" id="detail">Pulling the next hour of rain for this station.</p>
+        </div>
+        <span class="pill loading" id="pill">Checking</span>
+      </div>
+      <div class="slots" id="slots"></div>
+      <div class="radar-row">
+        <span id="radarKind">Radar …</span>
+        <span id="radarClock">Loading tiles</span>
+      </div>
+      <input id="scrub" type="range" min="0" max="0" value="0" disabled aria-label="Radar time" />
+      <div class="actions">
+        <button class="ghost" id="play" type="button" disabled>Pause loop</button>
+        <p class="err" id="error"></p>
+      </div>
+      <div class="patches" id="patches"></div>
+    </div>
+  </section>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const PATCHES = [
+      {
+        id: "kodambakkam",
+        name: "Kodambakkam",
+        hint: "near Railway station",
+        lat: 13.0524,
+        lng: 80.2209,
+      },
+      {
+        id: "central",
+        name: "Chennai Central",
+        hint: "near Park Station",
+        lat: 13.0827,
+        lng: 80.2757,
+      },
+      {
+        id: "wimco",
+        name: "Wimco Nagar",
+        hint: "near Wimco Nagar Metro",
+        lat: 13.1789,
+        lng: 80.3095,
+      },
+    ];
+
+    const WET_MM = 0.15;
+    const WET_CHANCE = 45;
+
+    let patch = PATCHES[0];
+    let frames = [];
+    let host = "https://tilecache.rainviewer.com";
+    let index = 0;
+    let playing = true;
+    let map, marker, radarLayer;
+
+    const $ = (id) => document.getElementById(id);
+
+    function formatClock(date) {
+      return date.toLocaleTimeString("en-IN", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "Asia/Kolkata",
+      });
+    }
+
+    function finish(slots, resolution) {
+      const now = Date.now();
+      const wet = slots.filter((s) => s.mm >= WET_MM || s.chance >= WET_CHANCE);
+      const firstWet = wet[0] || null;
+      const minutesToRain = firstWet
+        ? Math.max(0, Math.round((firstWet.time.getTime() - now) / 60000))
+        : null;
+      const maxMm = slots.reduce((m, s) => Math.max(m, s.mm), 0);
+      let verdict = "dry";
+      if (minutesToRain != null && minutesToRain <= 20) verdict = "soon";
+      else if (minutesToRain != null) verdict = "later";
+      return { slots, maxMm, firstWet, minutesToRain, verdict, resolution };
+    }
+
+    async function loadHour(lat, lng) {
+      const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat.toFixed(3)}&lon=${lng.toFixed(3)}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Forecast is unavailable right now.");
+      const data = await res.json();
+      const series = data.properties?.timeseries || [];
+      const now = Date.now();
+      const upcoming = series.filter((row) => {
+        const start = new Date(row.time).getTime();
+        return start + 60 * 60 * 1000 > now && start < now + 70 * 60 * 1000;
+      });
+      const row = upcoming[0];
+      if (!row) throw new Error("No hour forecast for this station.");
+      const mm = row.data?.next_1_hours?.details?.precipitation_amount ?? 0;
+      const symbol = row.data?.next_1_hours?.summary?.symbol_code ?? "";
+      const wetSymbol = /rain|sleet|thunder/.test(symbol);
+      return finish(
+        [{
+          time: new Date(Math.max(new Date(row.time).getTime(), now)),
+          mm,
+          chance: wetSymbol || mm >= WET_MM ? 70 : 10,
+          label: "This hour",
+        }],
+        "hour",
+      );
+    }
+
+    async function loadRadar() {
+      const res = await fetch("https://api.rainviewer.com/public/weather-maps.json");
+      if (!res.ok) throw new Error("Radar tiles are unavailable.");
+      const data = await res.json();
+      const now = Math.floor(Date.now() / 1000);
+      const past = (data.radar?.past || [])
+        .filter((f) => f.time >= now - 30 * 60)
+        .map((f) => ({ ...f, kind: "past" }));
+      const future = (data.radar?.nowcast || [])
+        .filter((f) => f.time <= now + 60 * 60)
+        .map((f) => ({ ...f, kind: "now" }));
+      const next = [...past, ...future];
+      if (!next.length) throw new Error("No radar frames in the next hour.");
+      return { host: data.host || host, frames: next };
+    }
+
+    function tileUrl(path) {
+      return `${host}${path}/256/{z}/{x}/{y}/2/1_1.png`;
+    }
+
+    function setMarker() {
+      const icon = L.divIcon({
+        className: "",
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        html: '<div style="width:28px;height:28px;border-radius:999px;background:#3ddec8;box-shadow:0 0 0 8px rgba(61,222,200,.25);border:2px solid #07141c"></div>',
+      });
+      if (!marker) {
+        marker = L.marker([patch.lat, patch.lng], { icon, title: patch.name }).addTo(map);
+      } else {
+        marker.setLatLng([patch.lat, patch.lng]);
+        marker.setIcon(icon);
+      }
+      map.panTo([patch.lat, patch.lng], { animate: true, duration: 0.6 });
+    }
+
+    function setRadarFrame() {
+      const frame = frames[index];
+      if (!frame) return;
+      if (radarLayer) map.removeLayer(radarLayer);
+      radarLayer = L.tileLayer(tileUrl(frame.path), { opacity: 0.72, zIndex: 2, maxZoom: 14 }).addTo(map);
+      $("radarKind").textContent = `Radar ${frame.kind === "now" ? "nowcast" : "just passed"}`;
+      $("radarClock").textContent = formatClock(new Date(frame.time * 1000));
+      $("scrub").value = String(index);
+    }
+
+    function renderSlots(outlook) {
+      const slots = outlook?.slots?.length
+        ? outlook.slots
+        : [{ time: new Date(), mm: 0, chance: 0, label: "This hour" }];
+      const root = $("slots");
+      root.className = "slots" + (slots.length > 2 ? " many" : "");
+      root.innerHTML = slots
+        .map((slot) => {
+          const height = Math.max(8, Math.min(100, slot.mm * 28 + (slot.chance > 50 ? 36 : 8)));
+          const wide = slots.length < 3;
+          if (wide) {
+            return `<div class="slot wide"><div class="t">${slot.label || formatClock(slot.time)}</div><div class="bar-wrap"><div class="bar" style="width:${height}%"></div></div><div class="mm">${slot.mm.toFixed(1)} mm</div></div>`;
+          }
+          return `<div class="slot"><div class="t" style="text-align:center">${slot.label || formatClock(slot.time)}</div><div class="bar-wrap"><div class="bar" style="height:${height}%"></div></div><div class="mm">${slot.mm.toFixed(1)} mm</div></div>`;
+        })
+        .join("");
+    }
+
+    function describe(outlook) {
+      const name = patch.name;
+      if (!outlook) {
+        return {
+          title: name,
+          detail: `Pulling the next hour of rain near ${patch.hint}.`,
+          pill: "Checking",
+          kind: "loading",
+        };
+      }
+      const grain =
+        outlook.resolution === "15min"
+          ? "Read in 15-minute slices."
+          : "Rainfall expected across this hour, not a minute-by-minute burst.";
+      if (outlook.verdict === "dry") {
+        return {
+          title: "Stay put",
+          detail: `No meaningful rain expected around ${name} (${patch.hint}) in the next hour. ${grain} This call is only for this station.`,
+          pill: "Dry hour",
+          kind: "dry",
+        };
+      }
+      if (outlook.verdict === "soon") {
+        return {
+          title: outlook.resolution === "hour" ? "Rain this hour" : `Rain in ${outlook.minutesToRain ?? 0} min`,
+          detail: `${name} looks wet inside the hour, about ${outlook.maxMm.toFixed(1)} mm. ${grain}`,
+          pill: "Incoming",
+          kind: "soon",
+        };
+      }
+      return {
+        title: outlook.firstWet ? `Rain around ${formatClock(outlook.firstWet.time)}` : "Rain later",
+        detail: `Not immediate, but ${name} picks up rain before the hour is over. About ${outlook.maxMm.toFixed(1)} mm. ${grain}`,
+        pill: "Later",
+        kind: "later",
+      };
+    }
+
+    function paintOutlook(outlook, loading) {
+      const d = describe(loading ? null : outlook);
+      $("eyebrow").textContent = `Watching · ${patch.name}`;
+      $("title").textContent = d.title;
+      $("detail").textContent = d.detail;
+      $("pill").textContent = d.pill;
+      $("pill").className = "pill " + d.kind;
+      renderSlots(outlook);
+    }
+
+    async function refreshForecast() {
+      paintOutlook(null, true);
+      try {
+        const outlook = await loadHour(patch.lat, patch.lng);
+        paintOutlook(outlook, false);
+      } catch (err) {
+        $("title").textContent = patch.name;
+        $("detail").textContent = err.message || "Forecast failed.";
+        $("pill").textContent = "Offline";
+        $("pill").className = "pill dry";
+      }
+    }
+
+    function nearestOfThree(lat, lng) {
+      let best = PATCHES[0];
+      let bestD = Infinity;
+      for (const p of PATCHES) {
+        const d = (p.lat - lat) ** 2 + (p.lng - lng) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          best = p;
+        }
+      }
+      return best;
+    }
+
+    function selectPatch(next) {
+      patch = next;
+      document.querySelectorAll(".patch").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.id === patch.id);
+      });
+      setMarker();
+      refreshForecast();
+    }
+
+    function buildPatches() {
+      const root = $("patches");
+      root.innerHTML = PATCHES.map(
+        (p) =>
+          `<button class="patch${p.id === patch.id ? " active" : ""}" type="button" data-id="${p.id}">${p.name}</button>`,
+      ).join("");
+      root.querySelectorAll(".patch").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const next = PATCHES.find((p) => p.id === btn.dataset.id);
+          if (next) selectPatch(next);
+        });
+      });
+    }
+
+    function initMap() {
+      map = L.map("map", {
+        zoomControl: false,
+        minZoom: 10,
+        maxZoom: 14,
+      }).setView([13.1, 80.26], 11);
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        subdomains: "abcd",
+        maxZoom: 19,
+        attribution: "&copy; OSM &copy; CARTO · radar RainViewer",
+      }).addTo(map);
+      L.control.zoom({ position: "bottomright" }).addTo(map);
+      setMarker();
+      requestAnimationFrame(() => map.invalidateSize());
+    }
+
+    $("scrub").addEventListener("input", (e) => {
+      playing = false;
+      $("play").textContent = "Play loop";
+      index = Number(e.target.value);
+      setRadarFrame();
+    });
+
+    $("play").addEventListener("click", () => {
+      playing = !playing;
+      $("play").textContent = playing ? "Pause loop" : "Play loop";
+    });
+
+    $("locate").addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        $("error").textContent = "Location not available. Pick a station.";
+        return;
+      }
+      $("locate").textContent = "Finding…";
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          selectPatch(nearestOfThree(pos.coords.latitude, pos.coords.longitude));
+          $("locate").textContent = "Use nearest of 3";
+          $("error").textContent = "";
+        },
+        () => {
+          $("locate").textContent = "Use nearest of 3";
+          $("error").textContent = "Location blocked. Pick a station.";
+        },
+        { enableHighAccuracy: true, timeout: 8000 },
+      );
+    });
+
+    setInterval(() => {
+      if (!playing || frames.length < 2) return;
+      index = (index + 1) % frames.length;
+      setRadarFrame();
+    }, 900);
+
+    buildPatches();
+    initMap();
+    refreshForecast();
+    loadRadar()
+      .then(({ host: h, frames: f }) => {
+        host = h;
+        frames = f;
+        const now = Math.floor(Date.now() / 1000);
+        const start = f.findIndex((fr) => fr.time >= now);
+        index = start === -1 ? f.length - 1 : start;
+        $("scrub").disabled = false;
+        $("scrub").max = String(Math.max(0, f.length - 1));
+        $("play").disabled = false;
+        setRadarFrame();
+      })
+      .catch((err) => {
+        $("error").textContent = err.message || "Radar failed.";
+      });
+  </script>
+</body>
+</html>
