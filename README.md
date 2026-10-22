@@ -10,8 +10,6 @@ Live radar (RainViewer) + hour outlook (MET Norway). Pick a station or use **Use
 
 ## Live site
 
-After GitHub Pages is on for this repo:
-
 **https://samdaniel05.github.io/mazhai-chennai/**
 
 ## Local
