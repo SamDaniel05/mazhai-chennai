@@ -31,6 +31,9 @@
     }
     #map { position: absolute; inset: 0; background: var(--ink); }
     .leaflet-container { font-family: Outfit, system-ui, sans-serif; background: var(--ink); }
+    .leaflet-tile-pane { filter: invert(0.92) hue-rotate(180deg) brightness(0.95) contrast(0.95); }
+    .leaflet-overlay-pane { filter: none; }
+    .leaflet-marker-pane { filter: none; }
     .leaflet-control-attribution {
       background: color-mix(in srgb, var(--ink) 72%, transparent) !important;
       color: var(--mist) !important;
@@ -349,7 +352,7 @@
       const frame = frames[index];
       if (!frame) return;
       if (radarLayer) map.removeLayer(radarLayer);
-      radarLayer = L.tileLayer(tileUrl(frame.path), { opacity: 0.72, zIndex: 2, maxZoom: 14, maxNativeZoom: 7, minZoom: 1 }).addTo(map);
+      radarLayer = L.tileLayer(tileUrl(frame.path), { opacity: 0.75, zIndex: 2, maxZoom: 19, maxNativeZoom: 7, minZoom: 1 }).addTo(map);
       $("radarKind").textContent = `Radar ${frame.kind === "now" ? "nowcast" : "just passed"}`;
       $("radarClock").textContent = formatClock(new Date(frame.time * 1000));
       $("scrub").value = String(index);
@@ -473,12 +476,12 @@
     function initMap() {
       map = L.map("map", {
         zoomControl: false,
-        minZoom: 9,
-        maxZoom: 13,
-      }).setView([13.1, 80.26], 10);
-      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
-        maxZoom: 16,
-        attribution: "&copy; Esri · radar RainViewer",
+        minZoom: 8,
+        maxZoom: 19,
+      }).setView([13.1, 80.26], 11);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap · radar RainViewer",
       }).addTo(map);
       L.control.zoom({ position: "bottomright" }).addTo(map);
       setMarker();
